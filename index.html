@@ -3,534 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Tài khoản & Lấy Code qua API</title>
+    <title>Tool Get Code & Lọc Email (Cloud Sync)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#2563eb',
-                        secondary: '#475569',
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tích hợp thư viện Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
     <style>
-        /* CSS for the toast notification */
-        #toast-container {
-            transition: all 0.3s ease-in-out;
-            opacity: 0;
-            transform: translateY(100%) translateX(-50%);
-            pointer-events: none;
+        .toast {
+            visibility: hidden; min-width: 250px; background-color: #1f2937; color: #fff;
+            text-align: center; border-radius: 8px; padding: 12px; position: fixed;
+            z-index: 50; left: 50%; bottom: 30px; transform: translateX(-50%);
+            opacity: 0; transition: opacity 0.3s, bottom 0.3s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); font-weight: 500;
         }
-        #toast-container.show {
-            opacity: 1;
-            transform: translateY(0) translateX(-50%);
-        }
-        /* Custom scrollbar for better look */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
+        .toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen p-4 md:p-8 text-slate-800 font-sans">
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-4 md:p-8 text-gray-800 font-sans">
 
-    <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white">
-            <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-3">
-                <i class="fas fa-users-cog"></i>
-                Tự động điền tài khoản nhanh
-            </h1>
-            <p class="text-blue-100 mt-2 text-sm">Quản lý danh sách tài khoản, lưu trữ tự động và tự động lấy mã xác nhận.</p>
+    <!-- PHẦN 1: TÀI KHOẢN VÀ GET CODE API (ĐỒNG BỘ ĐÁM MÂY) -->
+    <div class="max-w-6xl mx-auto glass-panel rounded-2xl shadow-xl p-6 border border-gray-100 mb-8">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl font-bold text-indigo-700"><i class="fa-solid fa-cloud-arrow-up mr-2"></i>Hệ thống Get Code API (Đồng bộ Đám mây)</h1>
+            <button onclick="clearAllAccounts()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition text-sm">
+                <i class="fa-solid fa-trash-can mr-1"></i> Xóa tất cả
+            </button>
         </div>
         
-        <div class="p-6">
-            <!-- Input Section -->
-            <div class="mb-8 bg-slate-50 p-5 rounded-xl border border-slate-200">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">
-                    <i class="fas fa-file-import text-blue-500 mr-1"></i> Nhập danh sách tài khoản (Định dạng: <code class="bg-slate-200 px-1 rounded text-pink-600">mail|pass|link_2fa</code>)
+        <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+            <label class="block text-sm font-semibold text-indigo-900 mb-2">Nhập danh sách tài khoản (mail|pass|link_api)</label>
+            <textarea id="accountInput" rows="3" class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="uajdir2@gmail.com|3A9UaeQtU@|https://api.example.com/getcode"></textarea>
+            
+            <div class="mt-3 flex items-center justify-between">
+                <label class="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
+                    <input type="checkbox" id="useCorsProxy" class="w-4 h-4 text-indigo-600 border-gray-300 rounded mr-2" checked>
+                    Dùng Proxy chống lỗi CORS
                 </label>
-                <textarea id="accountInput" rows="4" class="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow resize-y font-mono text-sm" placeholder="uajdir2@gmail.com|3A9UaeQtU@|https://lukaku.lol/sms/v4/getcode?id=4781829&#10;email2@gmail.com|pass123|https://api.example.com/get"></textarea>
-                
-                <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <button onclick="parseAccounts()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg transition duration-200 flex items-center gap-2 shadow-sm">
-                            <i class="fas fa-plus"></i> Thêm vào danh sách
-                        </button>
-                        <button onclick="clearAllAccounts()" class="bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-2.5 px-4 rounded-lg transition duration-200 border border-red-200 flex items-center gap-2">
-                            <i class="fas fa-trash-alt"></i> Xóa tất cả
-                        </button>
-                    </div>
-
-                    <!-- CORS Bypass Option -->
-                    <label class="flex items-center cursor-pointer p-2 bg-amber-50 rounded-lg border border-amber-200 text-amber-800 text-sm" title="Sử dụng proxy trung gian nếu trình duyệt chặn API do lỗi CORS">
-                        <input type="checkbox" id="useCorsProxy" class="form-checkbox h-5 w-5 text-amber-600 rounded focus:ring-amber-500 cursor-pointer">
-                        <span class="ml-2 font-medium">Bật vượt lỗi CORS (Dùng Proxy)</span>
-                    </label>
-                </div>
+                <button onclick="parseAccounts()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow transition">
+                    <i class="fa-solid fa-plus mr-1"></i> Thêm vào danh sách
+                </button>
             </div>
+        </div>
 
-            <!-- Table Section -->
-            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse whitespace-nowrap">
-                        <thead>
-                            <tr class="bg-slate-100 text-slate-700 uppercase text-xs font-bold tracking-wider">
-                                <th class="p-4 border-b w-12 text-center">STT</th>
-                                <th class="p-4 border-b">Email</th>
-                                <th class="p-4 border-b">Mật khẩu</th>
-                                <th class="p-4 border-b">Link API</th>
-                                <th class="p-4 border-b min-w-[250px]">Mã Code (Tự động)</th>
-                                <th class="p-4 border-b w-16 text-center">Xóa</th>
-                            </tr>
-                        </thead>
-                        <tbody id="accountTableBody" class="text-sm divide-y divide-slate-100">
-                            <!-- Dữ liệu sẽ được chèn vào đây bởi JS -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Empty State -->
-                <div id="emptyState" class="hidden flex-col items-center justify-center p-12 text-slate-400">
-                    <i class="fas fa-folder-open text-5xl mb-3 text-slate-300"></i>
-                    <p class="text-lg font-medium text-slate-500">Chưa có tài khoản nào</p>
-                    <p class="text-sm">Hãy nhập dữ liệu vào ô trống phía trên để bắt đầu.</p>
-                </div>
-            </div>
-            
-            <div class="mt-4 flex justify-between items-center text-sm text-slate-500">
-                <span id="totalCount">Tổng số: 0 tài khoản</span>
-                <span class="italic">Dữ liệu được tự động lưu trên trình duyệt</span>
-            </div>
-            
-            <!-- Section: Lọc Email Nhanh (Hotmail/Outlook...) -->
-            <div class="mt-12 pt-8 border-t border-slate-200">
-                <h2 class="text-xl md:text-2xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    <i class="fas fa-filter text-purple-600"></i>
-                    Lọc Email Nhanh
-                </h2>
-                <p class="text-slate-500 text-sm mb-6">Dán danh sách <code class="bg-slate-100 px-1 rounded text-pink-600">mail|pass|...</code> vào đây, hệ thống sẽ tạo một bảng chỉ chứa Email có đánh số thứ tự để bạn copy từng cái hoặc copy toàn bộ.</p>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- Cột Nhập liệu -->
-                    <div class="lg:col-span-1 bg-slate-50 p-5 rounded-xl border border-slate-200 h-fit">
-                        <label class="block text-sm font-semibold text-slate-700 mb-2">Dữ liệu gốc (Nhiều dòng):</label>
-                        <textarea id="rawEmailInput" rows="8" class="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-shadow resize-y font-mono text-sm mb-4" placeholder="email1@hotmail.com|pass1|...\nemail2@outlook.com|pass2|..."></textarea>
-                        
-                        <button onclick="parseEmailsList()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 rounded-lg transition duration-200 flex items-center justify-center gap-2 shadow-sm mb-3">
-                            <i class="fas fa-bolt"></i> Tách lấy Email
-                        </button>
-                        <button onclick="document.getElementById('rawEmailInput').value=''" class="w-full bg-white hover:bg-slate-50 text-slate-600 font-medium py-2 rounded-lg border border-slate-300 transition duration-200 flex items-center justify-center gap-2">
-                            <i class="fas fa-eraser"></i> Xóa ô nhập
-                        </button>
-                    </div>
-
-                    <!-- Cột Bảng Kết quả -->
-                    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                        <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
-                            <h3 class="font-bold text-slate-700">Bảng kết quả lọc</h3>
-                            <button onclick="copyAllEmails()" class="bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold py-1.5 px-4 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
-                                <i class="fas fa-copy"></i> Copy Toàn Bộ
-                            </button>
-                        </div>
-                        
-                        <div class="overflow-x-auto max-h-[400px] overflow-y-auto relative">
-                            <table class="w-full text-left border-collapse whitespace-nowrap">
-                                <thead class="sticky top-0 bg-slate-100 shadow-sm z-10">
-                                    <tr class="text-slate-700 uppercase text-xs font-bold tracking-wider">
-                                        <th class="p-3 border-b w-16 text-center">STT</th>
-                                        <th class="p-3 border-b">Tài khoản Email</th>
-                                        <th class="p-3 border-b w-28 text-center">Thao tác</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="emailTableBody" class="text-sm divide-y divide-slate-100">
-                                    <!-- Dữ liệu email sẽ nằm ở đây -->
-                                </tbody>
-                            </table>
-                            
-                            <!-- Empty State Email -->
-                            <div id="emailEmptyState" class="flex flex-col items-center justify-center p-12 text-slate-400">
-                                <i class="fas fa-clipboard-list text-4xl mb-3 text-slate-200"></i>
-                                <p class="text-sm font-medium">Chưa có dữ liệu</p>
-                            </div>
-                        </div>
-                        
-                        <div class="p-3 border-t border-slate-100 bg-slate-50 text-xs text-slate-500 rounded-b-xl flex justify-between">
-                            <span id="emailTotalCount">Tổng số: 0 email</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- End Section Lọc Email -->
-
+        <div class="overflow-x-auto rounded-lg border border-gray-200">
+            <table class="w-full text-left border-collapse bg-white">
+                <thead>
+                    <tr class="bg-gray-100 text-gray-600 text-sm">
+                        <th class="p-3 border-b font-semibold w-10 text-center">STT</th>
+                        <th class="p-3 border-b font-semibold">Email</th>
+                        <th class="p-3 border-b font-semibold">Mật khẩu</th>
+                        <th class="p-3 border-b font-semibold">Mã Code</th>
+                        <th class="p-3 border-b font-semibold text-center w-20">Xóa</th>
+                    </tr>
+                </thead>
+                <tbody id="accountTableBody">
+                    <!-- Dữ liệu render từ Firebase -->
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast-container" class="fixed bottom-8 left-1/2 z-50 flex items-center w-full max-w-xs p-4 space-x-3 text-gray-700 bg-white rounded-xl shadow-2xl border border-gray-100" role="alert">
-        <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-green-500 bg-green-100 rounded-lg">
-            <i class="fas fa-check"></i>
+    <!-- PHẦN 2: LỌC EMAIL HOTMAIL (CÔNG CỤ CỤC BỘ) -->
+    <div class="max-w-6xl mx-auto glass-panel rounded-2xl shadow-xl p-6 border border-purple-100">
+        <div class="flex justify-between items-center mb-6 border-b pb-4">
+            <h1 class="text-2xl font-bold text-purple-700"><i class="fa-solid fa-filter mr-2"></i>Trích xuất Email Nhanh</h1>
         </div>
-        <div id="toast-message" class="ml-3 text-sm font-medium">Đã copy thành công!</div>
+        
+        <div class="mb-6 bg-purple-50 p-4 rounded-xl border border-purple-100">
+            <label class="block text-sm font-semibold text-purple-900 mb-2">Dán danh sách gốc (mail|pass|...)</label>
+            <textarea id="filterInput" rows="3" class="w-full p-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" placeholder="nguyenvana@hotmail.com|matkhau123|thongtinkhac..."></textarea>
+            
+            <div class="mt-3 text-right">
+                <button onclick="parseFilter()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition">
+                    <i class="fa-solid fa-bolt mr-1"></i> Lọc lấy Email
+                </button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-lg border border-gray-200 relative">
+            <button onclick="copyAllFiltered()" class="absolute top-2 right-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition z-10">
+                <i class="fa-regular fa-copy mr-1"></i> Copy Tất Cả
+            </button>
+            <table class="w-full text-left border-collapse bg-white">
+                <thead>
+                    <tr class="bg-gray-100 text-gray-600 text-sm">
+                        <th class="p-3 border-b font-semibold w-16 text-center">STT</th>
+                        <th class="p-3 border-b font-semibold">Địa chỉ Email</th>
+                        <th class="p-3 border-b font-semibold text-right w-32">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody id="filterTableBody">
+                    <tr><td colspan="3" class="p-4 text-center text-gray-400 text-sm">Chưa có dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <!-- Thông báo Copy -->
+    <div id="toast" class="toast"><i class="fa-solid fa-check-circle mr-2 text-green-400"></i><span id="toastMsg">Thành công!</span></div>
 
     <script>
-        // State variables
-        let accounts = [];
-        
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', () => {
-            loadAccounts();
-            renderTable();
+        // CẤU HÌNH FIREBASE CỦA BẠN (ĐÃ TÍCH HỢP)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDO2pCZ0SCv_3cFcQ0HiKPO1c2pSkmE-7w",
+            authDomain: "tool-getcode-f5e0d.firebaseapp.com",
+            databaseURL: "https://tool-getcode-f5e0d-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tool-getcode-f5e0d",
+            storageBucket: "tool-getcode-f5e0d.firebasestorage.app",
+            messagingSenderId: "614158376202",
+            appId: "1:614158376202:web:eda64d754ae85e335aeef3"
+        };
+
+        // Khởi tạo Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const accountsRef = database.ref('accounts');
+
+        // Lắng nghe dữ liệu thay đổi từ đám mây (Realtime)
+        accountsRef.on('value', (snapshot) => {
+            const tbody = document.getElementById('accountTableBody');
+            tbody.innerHTML = '';
+            
+            const data = snapshot.val();
+            if (!data) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-sm">Chưa có tài khoản nào trên hệ thống...</td></tr>';
+                return;
+            }
+
+            let index = 1;
+            for (let id in data) {
+                const acc = data[id];
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b transition";
+
+                tr.innerHTML = `
+                    <td class="p-3 text-center text-sm font-semibold text-gray-500">${index++}</td>
+                    <td class="p-3">
+                        <span class="font-medium">${acc.email}</span>
+                        <button onclick="copyToClipboard('${acc.email}')" class="ml-2 text-xs text-indigo-500 hover:text-indigo-700 font-semibold"><i class="fa-regular fa-copy"></i></button>
+                    </td>
+                    <td class="p-3">
+                        <span>${acc.password}</span>
+                        <button onclick="copyToClipboard('${acc.password}')" class="ml-2 text-xs text-indigo-500 hover:text-indigo-700 font-semibold"><i class="fa-regular fa-copy"></i></button>
+                    </td>
+                    <td class="p-3 min-w-[250px]">
+                        <button onclick="fetchCode('${id}', '${acc.apiUrl}')" class="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition">
+                            <i class="fa-solid fa-rotate mr-1"></i> Lấy Code
+                        </button>
+                        <span class="ml-2 font-mono text-sm font-bold text-red-600" id="code-${id}">${acc.code || ''}</span>
+                        ${acc.code ? `<button onclick="copyToClipboard('${acc.code}')" class="ml-2 text-xs text-indigo-500 hover:text-indigo-700 font-semibold"><i class="fa-regular fa-copy"></i></button>` : ''}
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteAccount('${id}')" class="text-red-400 hover:text-red-600 transition p-1">
+                            <i class="fa-solid fa-xmark fa-lg"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
         });
 
-        // Load accounts from Local Storage
-        function loadAccounts() {
-            const saved = localStorage.getItem('accountManagerData');
-            if (saved) {
-                try {
-                    accounts = JSON.parse(saved);
-                } catch (e) {
-                    console.error("Lỗi khi đọc dữ liệu đã lưu", e);
-                    accounts = [];
-                }
-            }
-        }
-
-        // Save accounts to Local Storage
-        function saveAccounts() {
-            localStorage.setItem('accountManagerData', JSON.stringify(accounts));
-        }
-
-        // Parse raw input text
+        // Hàm thêm tài khoản lên Firebase
         function parseAccounts() {
-            const inputEl = document.getElementById('accountInput');
-            const lines = inputEl.value.split('\n');
-            let addedCount = 0;
-            
+            const input = document.getElementById('accountInput').value;
+            if (!input.trim()) return;
+
+            const lines = input.split('\n');
             lines.forEach(line => {
-                if (!line.trim()) return; // Skip empty lines
-                
                 const parts = line.split('|');
                 if (parts.length >= 3) {
-                    const email = parts[0].trim();
-                    const password = parts[1].trim();
-                    // Handle API URLs that might contain '|'
-                    const apiUrl = parts.slice(2).join('|').trim();
-
-                    // Only add if not entirely duplicate
-                    const exists = accounts.some(acc => acc.email === email && acc.password === password && acc.apiUrl === apiUrl);
-                    if (!exists) {
-                        accounts.push({
-                            id: Date.now() + Math.random(), // Unique ID
-                            email,
-                            password,
-                            apiUrl,
-                            code: null, // Fetched code
-                            status: 'idle' // idle, loading, error, success
-                        });
-                        addedCount++;
-                    }
+                    const newAcc = {
+                        email: parts[0].trim(),
+                        password: parts[1].trim(),
+                        apiUrl: parts.slice(2).join('|').trim(),
+                        code: ''
+                    };
+                    accountsRef.push(newAcc); // Đẩy lên đám mây
                 }
             });
+            document.getElementById('accountInput').value = '';
+            showToast("Đã thêm thành công!");
+        }
 
-            if (addedCount > 0) {
-                showToast(`Đã thêm ${addedCount} tài khoản mới`);
-                inputEl.value = ''; // Clear input only if we added something
-                saveAccounts();
-                renderTable();
-            } else if (lines.length > 0 && lines[0].trim() !== '') {
-                showToast("Không tìm thấy định dạng hợp lệ hoặc bị trùng!");
+        // Hàm xóa 1 tài khoản
+        function deleteAccount(id) {
+            if(confirm("Bạn có chắc chắn muốn xóa dòng này?")) {
+                accountsRef.child(id).remove();
             }
         }
 
-        // Render the HTML table based on state
-        function renderTable() {
-            const tbody = document.getElementById('accountTableBody');
-            const emptyState = document.getElementById('emptyState');
-            const totalCount = document.getElementById('totalCount');
-            
-            tbody.innerHTML = '';
-            
-            if (accounts.length === 0) {
-                emptyState.classList.remove('hidden');
-                emptyState.classList.add('flex');
-                totalCount.innerText = "Tổng số: 0 tài khoản";
-                return;
-            }
-            
-            emptyState.classList.add('hidden');
-            emptyState.classList.remove('flex');
-            totalCount.innerText = `Tổng số: ${accounts.length} tài khoản`;
-
-            accounts.forEach((acc, index) => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition-colors group";
-
-                // Code display logic based on status
-                let codeDisplayHtml = '';
-                if (acc.status === 'loading') {
-                    codeDisplayHtml = `<span class="text-amber-500 flex items-center gap-1"><i class="fas fa-spinner fa-spin"></i> Đang tải...</span>`;
-                } else if (acc.status === 'error') {
-                    codeDisplayHtml = `<span class="text-red-500" title="${acc.code}">${acc.code}</span>`;
-                } else if (acc.status === 'success') {
-                    codeDisplayHtml = `
-                        <span class="font-mono text-base font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                            ${acc.code}
-                        </span>
-                        <button onclick="copyToClipboard('${acc.code}')" class="ml-2 text-xs text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-1.5 rounded transition-colors" title="Copy mã">
-                            <i class="far fa-copy"></i>
-                        </button>`;
-                }
-
-                tr.innerHTML = `
-                    <td class="p-4 text-center text-slate-400 font-mono">${index + 1}</td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium text-slate-800">${acc.email}</span>
-                            <button onclick="copyToClipboard('${acc.email}')" class="text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"><i class="far fa-copy"></i></button>
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="font-mono">${acc.password}</span>
-                            <button onclick="copyToClipboard('${acc.password}')" class="text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"><i class="far fa-copy"></i></button>
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2 max-w-[200px]">
-                            <span class="text-xs text-slate-500 truncate" title="${acc.apiUrl}">${acc.apiUrl}</span>
-                            <a href="${acc.apiUrl}" target="_blank" class="text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Mở link trong tab mới"><i class="fas fa-external-link-alt"></i></a>
-                        </div>
-                    </td>
-                    <td class="p-4 flex items-center min-w-[280px]">
-                        <button onclick="fetchCode(${index})" class="${acc.status === 'loading' ? 'bg-slate-300' : 'bg-emerald-500 hover:bg-emerald-600 shadow-sm'} text-white text-sm font-semibold py-1.5 px-4 rounded-lg transition-colors mr-3 whitespace-nowrap" ${acc.status === 'loading' ? 'disabled' : ''}>
-                            <i class="fas fa-bolt mr-1"></i> Lấy Code
-                        </button>
-                        <div class="flex-1 flex items-center truncate">
-                            ${codeDisplayHtml}
-                        </div>
-                    </td>
-                    <td class="p-4 text-center">
-                        <button onclick="deleteAccount(${index})" class="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Xóa tài khoản này">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // Delete specific row
-        function deleteAccount(index) {
-            accounts.splice(index, 1);
-            saveAccounts();
-            renderTable();
-        }
-
-        // Clear all rows
+        // Hàm xóa tất cả
         function clearAllAccounts() {
-            if (accounts.length === 0) return;
-            if (confirm('Bạn có chắc chắn muốn xóa TẤT CẢ tài khoản trong danh sách?')) {
-                accounts = [];
-                saveAccounts();
-                renderTable();
-                showToast('Đã xóa toàn bộ danh sách');
+            if(confirm("XÓA TẤT CẢ trên toàn hệ thống (cả PC và Điện thoại)?")) {
+                accountsRef.remove();
             }
         }
 
-        // Fetch code from API
-        async function fetchCode(index) {
-            const acc = accounts[index];
-            acc.status = 'loading';
-            renderTable(); // Update UI to show loading
-
-            let targetUrl = acc.apiUrl;
+        // Hàm Lấy Code và cập nhật lên Firebase
+        async function fetchCode(id, url) {
             const useProxy = document.getElementById('useCorsProxy').checked;
-
-            // Apply CORS Proxy if checked (using corsproxy.io as a free reliable option)
-            if (useProxy) {
-                targetUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-            }
+            const fetchUrl = useProxy ? `https://corsproxy.io/?url=${encodeURIComponent(url)}` : url;
+            
+            const displaySpan = document.getElementById(`code-${id}`);
+            displaySpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-gray-500"></i>';
 
             try {
-                // Thêm timeout để tránh bị treo (10 giây)
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-                const response = await fetch(targetUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
+                const response = await fetch(fetchUrl, { signal: AbortSignal.timeout(10000) });
+                if (!response.ok) throw new Error("HTTP " + response.status);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                // Read result as text, then trim
                 let data = await response.text();
-                data = data.trim();
+                try { 
+                    const json = JSON.parse(data); 
+                    if(json.code) data = json.code; 
+                } catch(e) {}
 
-                // Simple check if it's a JSON response containing a common 'code' field
-                try {
-                    const json = JSON.parse(data);
-                    if (json && json.code) data = json.code;
-                    else if (json && json.data) data = json.data;
-                } catch(e) {
-                    // Not JSON, use raw text
-                }
-
-                if (data === "") {
-                    throw new Error("API trả về rỗng");
-                }
-
-                acc.code = data;
-                acc.status = 'success';
+                // Cập nhật code lên Firebase để đồng bộ sang điện thoại
+                accountsRef.child(id).update({ code: data });
+                copyToClipboard(data);
                 
-                // Auto copy code to clipboard
-                copyToClipboard(data, false);
-                showToast(`Đã tự động copy mã: ${data}`);
-
             } catch (error) {
-                console.error("Lỗi khi lấy code:", error);
-                
-                let errorMsg = "Lỗi kết nối";
-                if (error.name === 'AbortError') errorMsg = "Hết thời gian chờ (Timeout)";
-                else if (error.message.includes('HTTP')) errorMsg = error.message;
-                
-                if (!useProxy && error.message.includes('Failed to fetch')) {
-                    errorMsg = "Lỗi CORS/Mạng (Hãy thử bật Proxy)";
-                }
-
-                acc.code = errorMsg;
-                acc.status = 'error';
-            } finally {
-                saveAccounts();
-                renderTable(); // Update UI with result
+                console.error("Lỗi get code:", error);
+                accountsRef.child(id).update({ code: "LỖI!" });
+                alert("Lỗi khi lấy mã. Thử bật/tắt ô dùng Proxy rồi thử lại.");
             }
         }
 
-        // Utility for clipboard
-        function copyToClipboard(text, showNotification = true) {
-            if (!text) return;
+        /* ================= CÔNG CỤ LỌC EMAIL (CỤC BỘ) ================= */
+        let filteredEmails = [];
+        
+        function parseFilter() {
+            const input = document.getElementById('filterInput').value;
+            if (!input.trim()) return;
             
-            // Try modern clipboard API first
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => {
-                    if(showNotification) showToast(`Đã copy: ${text}`);
-                }).catch(err => {
-                    console.error('Lỗi clipboard API', err);
-                    fallbackCopyTextToClipboard(text, showNotification);
-                });
-            } else {
-                fallbackCopyTextToClipboard(text, showNotification);
-            }
-        }
-
-        // Fallback for older browsers or non-HTTPS contexts
-        function fallbackCopyTextToClipboard(text, showNotification) {
-            const textArea = document.createElement("textarea");
-            textArea.value = text;
-            textArea.style.position = "fixed";  // Avoid scrolling
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            
-            try {
-                const successful = document.execCommand('copy');
-                if(successful && showNotification) {
-                    showToast(`Đã copy: ${text}`);
-                }
-            } catch (err) {
-                console.error('Lỗi execCommand', err);
-                if(showNotification) showToast(`Trình duyệt không hỗ trợ copy`);
-            }
-            document.body.removeChild(textArea);
-        }
-
-        // Custom Toast Notification
-        let toastTimeout;
-        function showToast(message) {
-            const toastContainer = document.getElementById("toast-container");
-            const toastMessage = document.getElementById("toast-message");
-            
-            toastMessage.innerText = message;
-            toastContainer.classList.add("show");
-            
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => { 
-                toastContainer.classList.remove("show"); 
-            }, 3000);
-        }
-
-        // --- LOGIC CHO PHẦN LỌC EMAIL NHANH ---
-        let extractedEmails = [];
-
-        function parseEmailsList() {
-            const input = document.getElementById('rawEmailInput').value;
             const lines = input.split('\n');
-            extractedEmails = [];
+            filteredEmails = [];
             
             lines.forEach(line => {
-                if (!line.trim()) return;
                 const parts = line.split('|');
-                const email = parts[0].trim();
-                // Bỏ qua những dòng rỗng, lấy cột đầu tiên (trước dấu |)
-                if (email) {
-                    extractedEmails.push(email);
-                }
+                if (parts[0].trim()) filteredEmails.push(parts[0].trim());
             });
             
-            renderEmailTable();
-            
-            if (extractedEmails.length > 0) {
-                showToast(`Đã lọc được ${extractedEmails.length} email`);
-            } else {
-                showToast(`Không tìm thấy dữ liệu`);
-            }
+            renderFilterTable();
+            document.getElementById('filterInput').value = '';
         }
 
-        function renderEmailTable() {
-            const tbody = document.getElementById('emailTableBody');
-            const emptyState = document.getElementById('emailEmptyState');
-            const countLabel = document.getElementById('emailTotalCount');
-            
+        function renderFilterTable() {
+            const tbody = document.getElementById('filterTableBody');
             tbody.innerHTML = '';
             
-            if (extractedEmails.length === 0) {
-                emptyState.style.display = 'flex';
-                countLabel.innerText = "Tổng số: 0 email";
+            if(filteredEmails.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400 text-sm">Chưa có dữ liệu...</td></tr>';
                 return;
             }
             
-            emptyState.style.display = 'none';
-            countLabel.innerText = `Tổng số: ${extractedEmails.length} email`;
-            
-            extractedEmails.forEach((email, index) => {
+            filteredEmails.forEach((email, index) => {
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-purple-50 transition-colors group";
-                
+                tr.className = "hover:bg-gray-50 border-b";
                 tr.innerHTML = `
-                    <td class="p-3 text-center text-slate-400 font-mono border-b border-slate-50">${index + 1}</td>
-                    <td class="p-3 border-b border-slate-50">
-                        <span class="font-medium text-slate-800">${email}</span>
-                    </td>
-                    <td class="p-3 text-center border-b border-slate-50">
-                        <button onclick="copyToClipboard('${email}')" class="text-purple-600 hover:text-purple-800 bg-purple-100 hover:bg-purple-200 px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-sm">
-                            Copy
+                    <td class="p-3 text-center text-sm font-semibold text-gray-500">${index + 1}</td>
+                    <td class="p-3 font-medium text-purple-700">${email}</td>
+                    <td class="p-3 text-right">
+                        <button onclick="copyToClipboard('${email}')" class="text-sm text-blue-500 hover:text-blue-700 font-semibold bg-blue-50 py-1 px-3 rounded">
+                            <i class="fa-regular fa-copy"></i> Copy
                         </button>
                     </td>
                 `;
@@ -538,15 +276,23 @@
             });
         }
 
-        function copyAllEmails() {
-            if (extractedEmails.length === 0) {
-                showToast("Không có dữ liệu để copy!");
-                return;
-            }
-            // Gộp danh sách email bằng dấu xuống dòng (\n)
-            const text = extractedEmails.join('\n');
-            copyToClipboard(text, false);
-            showToast(`Đã copy toàn bộ ${extractedEmails.length} email!`);
+        function copyAllFiltered() {
+            if(filteredEmails.length === 0) return alert("Không có email nào để copy!");
+            copyToClipboard(filteredEmails.join('\n'));
+        }
+
+        /* ================= TIỆN ÍCH CHUNG ================= */
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`Đã copy: ${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`);
+            }).catch(() => alert('Lỗi không thể copy!'));
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            document.getElementById("toastMsg").innerText = message;
+            toast.className = "toast show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500);
         }
     </script>
 </body>
