@@ -27,15 +27,15 @@
 
     <!-- PHẦN 1: TÀI KHOẢN VÀ GET CODE API (ĐỒNG BỘ ĐÁM MÂY) -->
     <div class="max-w-6xl mx-auto glass-panel rounded-2xl shadow-xl p-6 border border-gray-100 mb-8">
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h1 class="text-2xl font-bold text-indigo-700"><i class="fa-solid fa-cloud-arrow-up mr-2"></i>Hệ thống Get Code API (Đồng bộ Đám mây)</h1>
+        <div class="flex justify-between items-center mb-6 border-b pb-4 border-gray-200">
+            <h1 class="text-2xl font-bold text-indigo-700"><i class="fa-solid fa-cloud-arrow-up mr-2"></i>Tự động điền IdApple)</h1>
             <button onclick="clearAllAccounts()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition text-sm">
                 <i class="fa-solid fa-trash-can mr-1"></i> Xóa tất cả
             </button>
         </div>
         
         <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-            <label class="block text-sm font-semibold text-indigo-900 mb-2">Nhập danh sách tài khoản (mail|pass|link_api)</label>
+            <label class="block text-sm font-semibold text-indigo-900 mb-2">Nhập tài khoản id apple (mail|pass|link_api)</label>
             <textarea id="accountInput" rows="3" class="w-full p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="uajdir2@gmail.com|3A9UaeQtU@|https://api.example.com/getcode"></textarea>
             
             <div class="mt-3 flex items-center justify-between">
@@ -67,10 +67,13 @@
         </div>
     </div>
 
-    <!-- PHẦN 2: LỌC EMAIL HOTMAIL (CÔNG CỤ CỤC BỘ) -->
+    <!-- PHẦN 2: LỌC EMAIL HOTMAIL (ĐỒNG BỘ ĐÁM MÂY) -->
     <div class="max-w-6xl mx-auto glass-panel rounded-2xl shadow-xl p-6 border border-purple-100">
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h1 class="text-2xl font-bold text-purple-700"><i class="fa-solid fa-filter mr-2"></i>Trích xuất Email Nhanh</h1>
+        <div class="flex justify-between items-center mb-6 border-b pb-4 border-purple-200">
+            <h1 class="text-2xl font-bold text-purple-700"><i class="fa-solid fa-filter mr-2"></i>Trích xuất Email Nhanh (Đồng bộ Đám mây)</h1>
+            <button onclick="clearAllHotmail()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition text-sm">
+                <i class="fa-solid fa-trash-can mr-1"></i> Xóa tất cả
+            </button>
         </div>
         
         <div class="mb-6 bg-purple-50 p-4 rounded-xl border border-purple-100">
@@ -93,11 +96,12 @@
                     <tr class="bg-gray-100 text-gray-600 text-sm">
                         <th class="p-3 border-b font-semibold w-16 text-center">STT</th>
                         <th class="p-3 border-b font-semibold">Địa chỉ Email</th>
-                        <th class="p-3 border-b font-semibold text-right w-32">Thao tác</th>
+                        <th class="p-3 border-b font-semibold text-center w-32">Thao tác</th>
+                        <th class="p-3 border-b font-semibold text-center w-20">Xóa</th>
                     </tr>
                 </thead>
                 <tbody id="filterTableBody">
-                    <tr><td colspan="3" class="p-4 text-center text-gray-400 text-sm">Chưa có dữ liệu...</td></tr>
+                    <!-- Dữ liệu render từ Firebase -->
                 </tbody>
             </table>
         </div>
@@ -107,7 +111,7 @@
     <div id="toast" class="toast"><i class="fa-solid fa-check-circle mr-2 text-green-400"></i><span id="toastMsg">Thành công!</span></div>
 
     <script>
-        // CẤU HÌNH FIREBASE CỦA BẠN (ĐÃ TÍCH HỢP)
+        // ================= CẤU HÌNH FIREBASE =================
         const firebaseConfig = {
             apiKey: "AIzaSyDO2pCZ0SCv_3cFcQ0HiKPO1c2pSkmE-7w",
             authDomain: "tool-getcode-f5e0d.firebaseapp.com",
@@ -121,16 +125,18 @@
         // Khởi tạo Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const accountsRef = database.ref('accounts');
+        const accountsRef = database.ref('accounts'); // Bảng 1
+        const hotmailRef = database.ref('hotmail_list'); // Bảng 2
 
-        // Lắng nghe dữ liệu thay đổi từ đám mây (Realtime)
+        /* ================= PHẦN 1: GET CODE API ================= */
+        // Lắng nghe dữ liệu Bảng 1
         accountsRef.on('value', (snapshot) => {
             const tbody = document.getElementById('accountTableBody');
             tbody.innerHTML = '';
             
             const data = snapshot.val();
             if (!data) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-sm">Chưa có tài khoản nào trên hệ thống...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-sm">Chưa có tài khoản nào...</td></tr>';
                 return;
             }
 
@@ -167,118 +173,119 @@
             }
         });
 
-        // Hàm thêm tài khoản lên Firebase
         function parseAccounts() {
             const input = document.getElementById('accountInput').value;
             if (!input.trim()) return;
-
             const lines = input.split('\n');
             lines.forEach(line => {
                 const parts = line.split('|');
                 if (parts.length >= 3) {
-                    const newAcc = {
+                    accountsRef.push({
                         email: parts[0].trim(),
                         password: parts[1].trim(),
                         apiUrl: parts.slice(2).join('|').trim(),
                         code: ''
-                    };
-                    accountsRef.push(newAcc); // Đẩy lên đám mây
+                    });
                 }
             });
             document.getElementById('accountInput').value = '';
-            showToast("Đã thêm thành công!");
+            showToast("Đã thêm vào Bảng 1!");
         }
 
-        // Hàm xóa 1 tài khoản
         function deleteAccount(id) {
-            if(confirm("Bạn có chắc chắn muốn xóa dòng này?")) {
-                accountsRef.child(id).remove();
-            }
+            if(confirm("Xóa dòng này?")) accountsRef.child(id).remove();
         }
 
-        // Hàm xóa tất cả
         function clearAllAccounts() {
-            if(confirm("XÓA TẤT CẢ trên toàn hệ thống (cả PC và Điện thoại)?")) {
-                accountsRef.remove();
-            }
+            if(confirm("Xóa toàn bộ dữ liệu ở bảng API Get Code?")) accountsRef.remove();
         }
 
-        // Hàm Lấy Code và cập nhật lên Firebase
         async function fetchCode(id, url) {
             const useProxy = document.getElementById('useCorsProxy').checked;
             const fetchUrl = useProxy ? `https://corsproxy.io/?url=${encodeURIComponent(url)}` : url;
-            
             const displaySpan = document.getElementById(`code-${id}`);
             displaySpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-gray-500"></i>';
 
             try {
                 const response = await fetch(fetchUrl, { signal: AbortSignal.timeout(10000) });
                 if (!response.ok) throw new Error("HTTP " + response.status);
-                
                 let data = await response.text();
-                try { 
-                    const json = JSON.parse(data); 
-                    if(json.code) data = json.code; 
-                } catch(e) {}
-
-                // Cập nhật code lên Firebase để đồng bộ sang điện thoại
+                try { const json = JSON.parse(data); if(json.code) data = json.code; } catch(e) {}
+                
                 accountsRef.child(id).update({ code: data });
                 copyToClipboard(data);
-                
             } catch (error) {
-                console.error("Lỗi get code:", error);
                 accountsRef.child(id).update({ code: "LỖI!" });
                 alert("Lỗi khi lấy mã. Thử bật/tắt ô dùng Proxy rồi thử lại.");
             }
         }
 
-        /* ================= CÔNG CỤ LỌC EMAIL (CỤC BỘ) ================= */
-        let filteredEmails = [];
-        
+        /* ================= PHẦN 2: LỌC EMAIL (ĐỒNG BỘ) ================= */
+        let globalFilteredEmails = []; // Biến lưu tạm để copy tất cả
+
+        // Lắng nghe dữ liệu Bảng 2
+        hotmailRef.on('value', (snapshot) => {
+            const tbody = document.getElementById('filterTableBody');
+            tbody.innerHTML = '';
+            globalFilteredEmails = [];
+            
+            const data = snapshot.val();
+            if (!data) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">Chưa có dữ liệu...</td></tr>';
+                return;
+            }
+
+            let index = 1;
+            for (let id in data) {
+                const emailStr = data[id].email;
+                globalFilteredEmails.push(emailStr);
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b";
+                tr.innerHTML = `
+                    <td class="p-3 text-center text-sm font-semibold text-gray-500">${index++}</td>
+                    <td class="p-3 font-medium text-purple-700">${emailStr}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="copyToClipboard('${emailStr}')" class="text-sm text-blue-500 hover:text-blue-700 font-semibold bg-blue-50 py-1 px-3 rounded">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteHotmail('${id}')" class="text-red-400 hover:text-red-600 transition p-1">
+                            <i class="fa-solid fa-xmark fa-lg"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        });
+
         function parseFilter() {
             const input = document.getElementById('filterInput').value;
             if (!input.trim()) return;
             
             const lines = input.split('\n');
-            filteredEmails = [];
-            
             lines.forEach(line => {
                 const parts = line.split('|');
-                if (parts[0].trim()) filteredEmails.push(parts[0].trim());
+                if (parts[0].trim()) {
+                    hotmailRef.push({ email: parts[0].trim() }); // Đẩy lên Firebase
+                }
             });
-            
-            renderFilterTable();
             document.getElementById('filterInput').value = '';
+            showToast("Đã lọc và lưu thành công!");
         }
 
-        function renderFilterTable() {
-            const tbody = document.getElementById('filterTableBody');
-            tbody.innerHTML = '';
-            
-            if(filteredEmails.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400 text-sm">Chưa có dữ liệu...</td></tr>';
-                return;
-            }
-            
-            filteredEmails.forEach((email, index) => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 border-b";
-                tr.innerHTML = `
-                    <td class="p-3 text-center text-sm font-semibold text-gray-500">${index + 1}</td>
-                    <td class="p-3 font-medium text-purple-700">${email}</td>
-                    <td class="p-3 text-right">
-                        <button onclick="copyToClipboard('${email}')" class="text-sm text-blue-500 hover:text-blue-700 font-semibold bg-blue-50 py-1 px-3 rounded">
-                            <i class="fa-regular fa-copy"></i> Copy
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        function deleteHotmail(id) {
+            if(confirm("Xóa email này?")) hotmailRef.child(id).remove();
+        }
+
+        function clearAllHotmail() {
+            if(confirm("Xóa toàn bộ danh sách Email đã lọc?")) hotmailRef.remove();
         }
 
         function copyAllFiltered() {
-            if(filteredEmails.length === 0) return alert("Không có email nào để copy!");
-            copyToClipboard(filteredEmails.join('\n'));
+            if(globalFilteredEmails.length === 0) return alert("Không có email nào để copy!");
+            copyToClipboard(globalFilteredEmails.join('\n'));
         }
 
         /* ================= TIỆN ÍCH CHUNG ================= */
